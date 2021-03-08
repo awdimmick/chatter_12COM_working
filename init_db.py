@@ -6,20 +6,20 @@ db = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES)
 db.row_factory = sqlite3.Row
 
 
-def init_db(db:sqlite3.Connection):
+def init_db(dbcnx:sqlite3.Connection):
 
-    create_user_table(db)
-    create_chatroom_table(db)
-    create_chatroommember_table(db)
-    create_message_table(db)
-    create_attachment_table(db)
+    create_user_table(dbcnx)
+    create_chatroom_table(dbcnx)
+    create_chatroommember_table(dbcnx)
+    create_message_table(dbcnx)
+    create_attachment_table(dbcnx)
 
 
-def create_user_table(db:sqlite3.Connection):
+def create_user_table(dbcnx:sqlite3.Connection):
 
     try:
         # GET DATABASE CURSOR OBJECT
-        c = db.cursor()
+        c = dbcnx.cursor()
 
         # REMOVE EXISTING USER TABLE
         c.execute("DROP TABLE IF EXISTS User")
@@ -39,20 +39,20 @@ def create_user_table(db:sqlite3.Connection):
         # Add 'deleteduser' entry to assign messages to when a user is deleted later
         c.execute("INSERT INTO User VALUES (0,'DeletedUser','',0,0,0)")
 
-        db.commit()
+        dbcnx.commit()
 
         print("Success: User table initialised.")
 
     except sqlite3.Error as e:
-        db.rollback()
+        dbcnx.rollback()
         print("ERROR: Unable to create User table. Details:", e)
         raise e
 
 
-def create_chatroom_table(db:sqlite3.Connection):
+def create_chatroom_table(dbcnx:sqlite3.Connection):
 
     try:
-        c = db.cursor()
+        c = dbcnx.cursor()
         # REMOVE EXISTING CHATROOM TABLE
         c.execute("DROP TABLE IF EXISTS Chatroom")
 
@@ -66,19 +66,19 @@ def create_chatroom_table(db:sqlite3.Connection):
             '''
         c.execute(sql)
 
-        db.commit()
+        dbcnx.commit()
         print("Success: Chatroom table initialised.")
 
     except sqlite3.Error as e:
-        db.rollback()
+        dbcnx.rollback()
         print("ERROR: Unable to create Chatroom table. Details:", e)
         raise e
 
 
-def create_chatroommember_table(db:sqlite3.Connection):
+def create_chatroommember_table(dbcnx:sqlite3.Connection):
 
     try:
-        c = db.cursor()
+        c = dbcnx.cursor()
         c.execute("DROP TABLE IF EXISTS ChatroomMember")
 
         sql = '''CREATE TABLE IF NOT EXISTS ChatroomMember(
@@ -90,19 +90,19 @@ def create_chatroommember_table(db:sqlite3.Connection):
                     )'''
 
         c.execute(sql)
-        db.commit()
+        dbcnx.commit()
         print("Success: ChatroomMember table initialised.")
 
     except sqlite3.Error as e:
-        db.rollback()
+        dbcnx.rollback()
         print("ERROR: Unable to create ChatroomMember table. Details:", e)
         raise e
 
 
-def create_message_table(db:sqlite3.Connection):
+def create_message_table(dbcnx:sqlite3.Connection):
 
     try:
-        c = db.cursor()
+        c = dbcnx.cursor()
 
         c.execute("DROP TABLE IF EXISTS Message")
 
@@ -117,20 +117,20 @@ def create_message_table(db:sqlite3.Connection):
                 )'''
 
         c.execute(sql)
-        db.commit()
+        dbcnx.commit()
         print("Success: Message table initialised.")
 
 
     except sqlite3.Error as e:
-        db.rollback()
+        dbcnx.rollback()
         print("ERROR: Unable to create Message table. Details:", e)
         raise e
 
 
-def create_attachment_table(db:sqlite3.Connection):
+def create_attachment_table(dbcnx:sqlite3.Connection):
 
     try:
-        c = db.cursor()
+        c = dbcnx.cursor()
 
         c.execute("DROP TABLE IF EXISTS Attachment")
 
@@ -145,12 +145,12 @@ def create_attachment_table(db:sqlite3.Connection):
 
         c.execute(sql)
 
-        db.commit()
+        dbcnx.commit()
         print("Success: Attachment table initialised.")
 
 
     except sqlite3.Error as e:
-        db.rollback()
+        dbcnx.rollback()
         print("ERROR: Unable to create Attachment table. Details:", e)
         raise e
 
@@ -162,7 +162,7 @@ if __name__ == '__main__':
         print(f"WARNING: Continuing will erase all contents in the database '{DB_PATH}'.\n"
           f"Please ensure that you have a recent backup of the database file!")
 
-        if input(f"Please enter the number {conf_number} to continue: ") != conf_number:
+        if input(f"Please enter the number {conf_number} to continue: ") != str(conf_number):
             raise ValueError("Incorrect confirmation code entered.")
 
         init_db(db)

@@ -50,6 +50,10 @@ class User(ChatterDB):
             raise UserNotFoundError(f"ERROR: No user found with userid {userid}.")
 
     @property
+    def userid(self):
+        return self.__userid
+
+    @property
     def username(self):
         return self.__username
 
@@ -77,6 +81,174 @@ class User(ChatterDB):
         pass
 
 
+class ChatroomNotFoundError(Exception):
+    pass
+
+
+class Chatroom(ChatterDB):
+
+    def __init__(self, chatroomid, db: sqlite3.Connection):
+
+        self.__db = db
+        self.__chatroomid = chatroomid
+
+        c = self.__db.cursor()
+
+        chatroom_data = c.execute("SELECT name, description, joincode FROM Chatroom WHERE chatroomid=?",
+                              [self.__chatroomid]).fetchone()
+
+        if chatroom_data:
+            self.__name = chatroom_data['name']
+            self.__description = chatroom_data['description']
+            self.__joincode = chatroom_data['joincode']
+
+        else:
+            raise ChatroomNotFoundError(f"ERROR: No chatroom found with chatroomid {chatroomid}.")
+
+    @property
+    def chatroomid(self):
+        return self.__chatroomid
+
+    @property
+    def name(self):
+        return self.__name
+
+    @property
+    def description(self):
+        return self.__description
+
+    @description.setter
+    def description(self, value):
+        self.__description = value
+        # TODO: Will need to call update method to update description in database
+        # self.__update(description=value)
+
+    @property
+    def joincode(self):
+        return self.__joincode
+
+    def delete(self):
+        pass
+
+    def update(self):
+        pass
+
+    @staticmethod
+    def add():
+        pass
+
+
+class MessageNotFoundError(Exception):
+    pass
+
+
+class Message(ChatterDB):
+
+    def __init__(self, messageid, db: sqlite3.Connection):
+
+        self.__db = db
+        self.__messageid = messageid
+
+        c = self.__db.cursor()
+
+        message_data = c.execute("SELECT content, chatroomid, senderid, timestamp FROM Message WHERE messageid=?",
+                              [self.__messageid]).fetchone()
+
+        if message_data:
+            self.__content = message_data['content']
+            self.__chatroomid = int(message_data['chatroomid'])
+            self.__senderid = int(message_data['senderid'])
+            self.__timestamp = message_data['timestamp']
+
+        else:
+            raise MessageNotFoundError(f"ERROR: No message found with mesageid {messageid}.")
+
+    @property
+    def messageid(self):
+        return self.__messageid
+
+    @property
+    def content(self):
+        return self.__content
+
+    @property
+    def chatroomid(self):
+        return self.__chatroomid
+
+    @property
+    def chatroom(self):
+        return Chatroom(self.__chatroomid, self.__db)
+
+    @property
+    def senderid(self):
+        return self.__senderid
+
+    @property
+    def sender(self):
+        return User(self.__senderid, self.__db)
+
+    @property
+    def timestamp(self):
+        return datetime.datetime.fromtimestamp(self.__timestamp)
+
+    def delete(self):
+        pass
+
+    def update(self):
+        pass
+
+    @staticmethod
+    def add():
+        pass
+
+
+class AttachmentNotFoundError(Exception):
+    pass
+
+
+class Attachment(ChatterDB):
+
+    def __init__(self, attachmentid, db: sqlite3.Connection):
+
+        self.__db = db
+        self.__attachmentid = attachmentid
+
+        c = self.__db.cursor()
+
+        attachment_data = c.execute("SELECT messageid, filepath FROM Attachment WHERE attachmentid=?",
+                              [self.__attachmentid]).fetchone()
+
+        if attachment_data:
+            self.__messageid = attachment_data['messageid']
+            self.__filepath = attachment_data['filepath']
+
+        else:
+            raise AttachmentNotFoundError(f"ERROR: No attachment found with attachment {attachmentid}.")
+
+    @property
+    def filepath(self):
+        return self.__filepath
+
+    @property
+    def messageid(self):
+        return self.__messageid
+
+    @property
+    def message(self):
+        return Message(self.__messageid, self.__db)
+
+    def delete(self):
+        pass
+
+    def update(self):
+        pass
+
+    @staticmethod
+    def add():
+        pass
+
+
 if __name__=="__main__":
+
     db = get_db()
-    u = User(0, get_db())
+

@@ -1,8 +1,8 @@
 import init_db, sqlite3, time, unittest, chatter_classes
 
-
 db = sqlite3.connect('test.db', detect_types=sqlite3.PARSE_DECLTYPES)
 db.row_factory = sqlite3.Row
+
 
 def add_test_users(db:sqlite3.Connection):
 
@@ -129,6 +129,18 @@ def add_attachments(db:sqlite3.Connection):
 
     db.commit()
 
+
+class SetupTestData(unittest.TestCase):
+
+    # Initialise test database and add required data
+    init_db.init_db(db)
+    add_test_users(db)
+    add_test_chatrooms(db)
+    add_chatroom_members(db)
+    add_messages(db)
+    add_attachments(db)
+
+
 class TestUser(unittest.TestCase):
 
     def test_constructor_existing_user(self):
@@ -145,6 +157,38 @@ class TestUser(unittest.TestCase):
         # assertRaises()
         self.assertRaises(chatter_classes.UserNotFoundError, chatter_classes.User, -1, db)
 
+
+class TestChatroom(unittest.TestCase):
+
+    def test_constructor_existing_chatroom(self):
+        cr = chatter_classes.Chatroom(1, db)
+        self.assertEqual(cr.name, "TestRoom1")
+
+    def test_constructor_chatroom_not_found(self):
+        self.assertRaises(chatter_classes.ChatroomNotFoundError, chatter_classes.Chatroom, -1, db)
+
+
+class TestMessage(unittest.TestCase):
+
+    def test_contructor_existing_message(self):
+        m = chatter_classes.Message(1, db)
+        self.assertEqual(m.content, "This is the first message in TestRoom1, sent by TestUser1. It has two attachments (a picture of Donald Trump and another of Gary Barlow).")
+        self.assertEqual(m.chatroom.name, chatter_classes.Chatroom(1,db).name)
+        self.assertEqual(m.sender.username, chatter_classes.User(1,db).username)
+
+    def test_constructor_message_not_found(self):
+        self.assertRaises(chatter_classes.MessageNotFoundError, chatter_classes.Message, -1, db)
+
+
+class TestAttachment(unittest.TestCase):
+
+    def test_constructor_existing_attachment(self):
+        a = chatter_classes.Attachment(1,db)
+        self.assertEqual(a.filepath, "donald.png")
+        self.assertEqual(a.message.messageid, chatter_classes.Message(1, db).messageid)
+
+    def test_constructor_attachment_not_found(self):
+        self.assertRaises(chatter_classes.AttachmentNotFoundError, chatter_classes.Attachment, -1, db)
 
 if __name__ == '__main__':
 
