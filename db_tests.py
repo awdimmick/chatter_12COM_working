@@ -175,6 +175,7 @@ class TestMessage(unittest.TestCase):
         self.assertEqual(m.content, "This is the first message in TestRoom1, sent by TestUser1. It has two attachments (a picture of Donald Trump and another of Gary Barlow).")
         self.assertEqual(m.chatroom.name, chatter_classes.Chatroom(1,db).name)
         self.assertEqual(m.sender.username, chatter_classes.User(1,db).username)
+        self.assertEqual(m.timestamp.year, 2021)
 
     def test_constructor_message_not_found(self):
         self.assertRaises(chatter_classes.MessageNotFoundError, chatter_classes.Message, -1, db)
@@ -192,6 +193,7 @@ class TestAttachment(unittest.TestCase):
 
 if __name__ == '__main__':
 
+
     # Initialise test database and add required data
     init_db.init_db(db)
     add_test_users(db)
@@ -199,6 +201,7 @@ if __name__ == '__main__':
     add_chatroom_members(db)
     add_messages(db)
     add_attachments(db)
+
 
     unittest.main()
 

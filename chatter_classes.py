@@ -1,6 +1,6 @@
 import sqlite3, abc, datetime
 
-DB_PATH = 'chatter_db.db'
+DB_PATH = 'test.db' #'chatter_db.db'
 
 def get_db():
     db = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES)
@@ -27,6 +27,13 @@ class ChatterDB(abc.ABC):
 class UserNotFoundError(Exception):
     pass
 
+
+class UserPermissionError(Exception):
+    pass
+
+
+class UserActionError(Exception):
+    pass
 
 class User(ChatterDB):
 
@@ -70,8 +77,26 @@ class User(ChatterDB):
         # Rather than a meaningless integer, provide a useful datetime object
         return datetime.datetime.fromtimestamp(self.__last_login_ts)
 
-    def delete(self):
-        pass
+    def delete(self, active_user):
+        # Do we have permission to delete? Is the active user either the self or an admin?
+        if active_user.userid == self.__userid or active_user.is_admin:
+            # Assuming we can delete, we need to update all messages that the user has sent to be senderid = 0
+            users_messsages = Message.get_messages_from_user(self.__userid, db)
+            for m in users_messsages:
+                # update senderid to 0
+                m.update(senderid=0)
+
+            try:
+                c = db.cursor()
+                c.execute("DELETE FROM User WHERE userid=?", [self.__userid])
+                db.commit()
+            except sqlite3.Error as e:
+                raise UserActionError(f"ERROR: Cannot delete userid {self.__userid}. Details:\n{e}")
+
+        else:
+            # raise error
+            raise UserPermissionError(f"Active user (userid: {active_user.userid}) does not have permission "
+                                      f"to delete userid {self.__userid}.")
 
     def update(self):
         pass
@@ -194,12 +219,52 @@ class Message(ChatterDB):
     def delete(self):
         pass
 
-    def update(self):
-        pass
+    def update(self, content=None, chatroomid=None, senderid=None, timestamp:datetime.datetime=None):
+        try:
+            c = db.cursor()
+
+            if content:
+                c.execute("UPDATE Message SET content=? WHERE messageid=?", [content, self.__messageid])
+                self.__content = content
+
+            if chatroomid is not None:
+                c.execute("UPDATE Message SET chatroomid=? WHERE messageid=?", [chatroomid, self.__messageid])
+                self.__chatroomid = chatroomid
+
+            if senderid is not None:
+                c.execute("UPDATE Message SET senderid=? WHERE messageid=?", [senderid, self.__messageid])
+                self.__senderid = senderid
+
+            if timestamp is not None:
+                c.execute("UPDATE Message SET timestamp=? WHERE messageid=?", [timestamp.timestamp(), self.__messageid])
+                self.__timestamp = timestamp
+
+            db.commit()
+
+        except sqlite3.Error as e:
+            db.rollback()
+            print(f"ERROR: Exception raised when updating messageid {self.__messageid}.\n"
+                  f"Database rolled back to last commit. Details:\n{e}")
+
 
     @staticmethod
     def add():
         pass
+
+    @staticmethod
+    def get_messages_from_user(userid, db:sqlite3.Connection):
+
+        c = db.cursor()
+
+        message_rows = c.execute("SELECT messageid FROM Message WHERE senderid = ?", [userid]).fetchall()
+
+        messages_to_return = []
+
+        for row in message_rows:
+
+            messages_to_return.append(Message(int(row['messageid']), db))
+
+        return messages_to_return
 
 
 class AttachmentNotFoundError(Exception):
@@ -251,4 +316,6 @@ class Attachment(ChatterDB):
 if __name__=="__main__":
 
     db = get_db()
-
+    u = User(1, db)
+    admin_u = User(6, db)
+    u.delete(admin_u)
