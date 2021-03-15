@@ -1,6 +1,6 @@
 import sqlite3, abc, datetime
 
-DB_PATH = 'test.db' #'chatter_db.db'
+DB_PATH = 'chatter_db.db'
 
 def get_db():
     db = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES)
@@ -81,15 +81,15 @@ class User(ChatterDB):
         # Do we have permission to delete? Is the active user either the self or an admin?
         if active_user.userid == self.__userid or active_user.is_admin:
             # Assuming we can delete, we need to update all messages that the user has sent to be senderid = 0
-            users_messsages = Message.get_messages_from_user(self.__userid, db)
+            users_messsages = Message.get_messages_from_user(self.__userid, self.__db)
             for m in users_messsages:
                 # update senderid to 0
                 m.update(senderid=0)
 
             try:
-                c = db.cursor()
+                c = self.__db.cursor()
                 c.execute("DELETE FROM User WHERE userid=?", [self.__userid])
-                db.commit()
+                self.__db.commit()
             except sqlite3.Error as e:
                 raise UserActionError(f"ERROR: Cannot delete userid {self.__userid}. Details:\n{e}")
 
@@ -99,11 +99,32 @@ class User(ChatterDB):
                                       f"to delete userid {self.__userid}.")
 
     def update(self):
+        # TODO: Add User.update()
         pass
 
     @staticmethod
-    def add():
-        pass
+    def add(username, password, db:sqlite3.Connection):
+
+        try:
+            c = db.cursor()
+            # Check username is unique
+            existing_username = c.execute("SELECT userid FROM User WHERE username=?", [username]).fetchone()
+
+            if existing_username:
+                raise UserActionError(f"User already exists with username '{username}'.")
+
+            # Insert new user
+            c.execute("INSERT INTO User (username, password, last_login_ts) VALUES (?, ?, ?)",
+                      (username, password, 0))
+            new_user_id = c.lastrowid
+            db.commit()
+
+            return User(new_user_id, db)
+
+        except sqlite3.Error as e:
+            db.rollback()
+            print(f"ERROR: Exception raised when adding user {username}.\n"
+                  f"Database rolled back to last commit. Details:\n{e}")
 
 
 class ChatroomNotFoundError(Exception):
@@ -153,13 +174,16 @@ class Chatroom(ChatterDB):
         return self.__joincode
 
     def delete(self):
+        # TODO: Add Chatroom.delete()
         pass
 
     def update(self):
+        # TODO: Add Chatroom.update()
         pass
 
     @staticmethod
     def add():
+        # TODO: Add Chatroom.add()
         pass
 
 
@@ -217,11 +241,14 @@ class Message(ChatterDB):
         return datetime.datetime.fromtimestamp(self.__timestamp)
 
     def delete(self):
+        #TODO: Add Message.delete()
         pass
 
+    # Tweaked the interface below to include db
     def update(self, content=None, chatroomid=None, senderid=None, timestamp:datetime.datetime=None):
+
         try:
-            c = db.cursor()
+            c = self.__db.cursor()
 
             if content:
                 c.execute("UPDATE Message SET content=? WHERE messageid=?", [content, self.__messageid])
@@ -239,17 +266,30 @@ class Message(ChatterDB):
                 c.execute("UPDATE Message SET timestamp=? WHERE messageid=?", [timestamp.timestamp(), self.__messageid])
                 self.__timestamp = timestamp
 
-            db.commit()
+            self.__db.commit()
 
         except sqlite3.Error as e:
-            db.rollback()
+            self.__db.rollback()
             print(f"ERROR: Exception raised when updating messageid {self.__messageid}.\n"
                   f"Database rolled back to last commit. Details:\n{e}")
 
 
     @staticmethod
-    def add():
-        pass
+    def add(content, chatroomid, senderid, db:sqlite3.Connection):
+        try:
+            c = db.cursor()
+            c.execute("INSERT INTO Message (content, chatroomid, senderid, timestamp) VALUES (?, ?, ?, ?)",
+                      (content, chatroomid, senderid, datetime.datetime.now().timestamp()))
+            new_messageid = c.lastrowid
+            db.commit()
+
+            return Message(new_messageid, db)
+
+        except sqlite3.Error as e:
+            db.rollback()
+            print(f"ERROR: Exception raised when adding message.\n"
+                  f"Database rolled back to last commit. Details:\n{e}")
+            raise e
 
     @staticmethod
     def get_messages_from_user(userid, db:sqlite3.Connection):
@@ -303,19 +343,20 @@ class Attachment(ChatterDB):
         return Message(self.__messageid, self.__db)
 
     def delete(self):
+        # TODO: Add Attachment.delete()
         pass
 
     def update(self):
+        # TODO: Add Attachment.update()
         pass
 
     @staticmethod
     def add():
+        # TODO: Add Attachment.add()
         pass
 
 
 if __name__=="__main__":
 
     db = get_db()
-    u = User(1, db)
-    admin_u = User(6, db)
-    u.delete(admin_u)
+

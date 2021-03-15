@@ -32,6 +32,10 @@ class UserNotAdminError(Exception):
     pass
 
 
+class UserActionError(Exception):
+    pass
+
+
 class User(ChatterDB):
 
     def __init__(self, userid, db:sqlite3.Connection):
@@ -131,7 +135,15 @@ class User(ChatterDB):
         # TODO: Check for unique username
         try:
             c = db.cursor()
-            c.execute("INSERT INTO User (username, password, last_login_ts) VALUES (?, ?, ?)", (username, password, 0))
+            # Check username is unique
+            existing_username = c.execute("SELECT userid FROM User WHERE username=?", [username]).fetchone()
+
+            if existing_username:
+                raise UserActionError(f"User already exists with username '{username}'.")
+
+            # Insert new user
+            c.execute("INSERT INTO User (username, password, last_login_ts) VALUES (?, ?, ?)",
+                      (username, password, 0))
             new_user_id = c.lastrowid
             db.commit()
 

@@ -132,13 +132,13 @@ def add_attachments(db:sqlite3.Connection):
 
 class SetupTestData(unittest.TestCase):
 
-    # Initialise test database and add required data
-    init_db.init_db(db)
-    add_test_users(db)
-    add_test_chatrooms(db)
-    add_chatroom_members(db)
-    add_messages(db)
-    add_attachments(db)
+    def test_setup_initialise_database(self):
+        init_db.init_db(db)
+        add_test_users(db)
+        add_test_chatrooms(db)
+        add_chatroom_members(db)
+        add_messages(db)
+        add_attachments(db)
 
 
 class TestUser(unittest.TestCase):
@@ -156,6 +156,35 @@ class TestUser(unittest.TestCase):
         # Note that the arguments for the constructor need to be passed as additional arguments to
         # assertRaises()
         self.assertRaises(chatter_classes.UserNotFoundError, chatter_classes.User, -1, db)
+
+    def test_add_new_user(self):
+        new_user = chatter_classes.User.add("NewTestUser", "pass123", db)
+        self.assertIsInstance(new_user, chatter_classes.User)
+        self.assertEqual(new_user.username, "NewTestUser")
+
+    def test_new_username_unique(self):
+        new_user = chatter_classes.User.add("UniqueTestUser", "unique123",db)
+        self.assertRaises(chatter_classes.UserActionError, chatter_classes.User.add, "UniqueTestUser", "unique123", db)
+
+    def test_delete_user_by_admin(self):
+        u = chatter_classes.User(5, db)
+
+        # As well as deleting the user, we need to ensure that their messages have been reassigned
+        users_messages = chatter_classes.Message.get_messages_from_user(5, db)
+        users_message_ids = [message.messageid for message in users_messages]
+
+        u.delete(chatter_classes.User(6, db))  # User 6 is TestAdmin
+
+        for message_id in users_message_ids:
+            m = chatter_classes.Message(message_id, db)
+            self.assertEqual(m.senderid, 0)  # assert message's sender Id updated to DeletedUser 0
+
+        # Check it's no longer possible to instantiate the deleted user
+        self.assertRaises(chatter_classes.UserNotFoundError, chatter_classes.User, 5, db)
+
+    def test_delete_user_non_admin_fails(self):
+        u = chatter_classes.User(4, db)
+        self.assertRaises(chatter_classes.UserPermissionError, u.delete, chatter_classes.User(1, db))  # User 1 is a standard user
 
 
 class TestChatroom(unittest.TestCase):
@@ -180,6 +209,17 @@ class TestMessage(unittest.TestCase):
     def test_constructor_message_not_found(self):
         self.assertRaises(chatter_classes.MessageNotFoundError, chatter_classes.Message, -1, db)
 
+    def test_add_new_message(self):
+
+        text = "This is a test message generated in the unit test test_add_new_message()"
+
+        message = chatter_classes.Message.add(text, 1, 1, db)
+
+        self.assertIsInstance(message, chatter_classes.Message)
+        self.assertEqual(message.content, text)
+        self.assertEqual(message.sender.username, chatter_classes.User(1, db).username)
+        self.assertEqual(message.chatroom.name, chatter_classes.Chatroom(1, db).name)
+
 
 class TestAttachment(unittest.TestCase):
 
@@ -191,17 +231,8 @@ class TestAttachment(unittest.TestCase):
     def test_constructor_attachment_not_found(self):
         self.assertRaises(chatter_classes.AttachmentNotFoundError, chatter_classes.Attachment, -1, db)
 
+
 if __name__ == '__main__':
-
-
-    # Initialise test database and add required data
-    init_db.init_db(db)
-    add_test_users(db)
-    add_test_chatrooms(db)
-    add_chatroom_members(db)
-    add_messages(db)
-    add_attachments(db)
-
 
     unittest.main()
 
