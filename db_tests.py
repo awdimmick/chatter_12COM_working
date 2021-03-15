@@ -1,4 +1,4 @@
-import init_db, sqlite3, time, unittest, chatter_classes
+import init_db, sqlite3, time, unittest, chatter_classes, datetime
 
 db = sqlite3.connect('test.db', detect_types=sqlite3.PARSE_DECLTYPES)
 db.row_factory = sqlite3.Row
@@ -185,6 +185,19 @@ class TestUser(unittest.TestCase):
     def test_delete_user_non_admin_fails(self):
         u = chatter_classes.User(4, db)
         self.assertRaises(chatter_classes.UserPermissionError, u.delete, chatter_classes.User(1, db))  # User 1 is a standard user
+
+    def test_update_user(self):
+        u = chatter_classes.User(1, db)
+        u.update(username="UpdatedUser", password="updatedpass", last_login_ts=0, active=False, admin=True)
+
+        v = chatter_classes.User(1, db)
+        self.assertEqual(v.username, "UpdatedUser")
+        self.assertEqual(v.last_login_ts, datetime.datetime.fromtimestamp(0))
+        self.assertTrue(v.is_admin)
+        self.assertFalse(v.is_active)
+
+        # Restore Test User 1's details
+        u.update(username="TestUser1", password="pass1234", last_login_ts=0, active=True, admin=False)
 
 
 class TestChatroom(unittest.TestCase):

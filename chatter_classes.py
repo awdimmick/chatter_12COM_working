@@ -80,6 +80,8 @@ class User(ChatterDB):
     def delete(self, active_user):
         # Do we have permission to delete? Is the active user either the self or an admin?
         if active_user.userid == self.__userid or active_user.is_admin:
+            # TODO: Check the user isn't the only owner of a chatroom before deleting them
+
             # Assuming we can delete, we need to update all messages that the user has sent to be senderid = 0
             users_messsages = Message.get_messages_from_user(self.__userid, self.__db)
             for m in users_messsages:
@@ -92,15 +94,53 @@ class User(ChatterDB):
                 self.__db.commit()
             except sqlite3.Error as e:
                 raise UserActionError(f"ERROR: Cannot delete userid {self.__userid}. Details:\n{e}")
+                self.__db.rollback()
+                for m in users_messsages:
+                    # update senderid to 0
+                    m.update(senderid=self.__userid)
 
         else:
             # raise error
             raise UserPermissionError(f"Active user (userid: {active_user.userid}) does not have permission "
                                       f"to delete userid {self.__userid}.")
 
-    def update(self):
+    def update(self, username=None, password=None, last_login_ts=None, admin=None, active=None):
         # TODO: Add User.update()
-        pass
+        try:
+            c = self.__db.cursor()
+
+            if username is not None:
+                # is the username unqiue?
+
+                existing_username = c.execute("SELECT userid FROM User WHERE username=?", [username]).fetchone()
+
+                if existing_username:
+                    raise UserActionError(f"User already exists with username '{username}'.")
+
+                c.execute("UPDATE User SET username=? WHERE userid=? ", [ username, self.__userid])
+
+            if password is not None:
+                # TODO: Add password length/criteria validation and hashing
+                c.execute("UPDATE User SET password=? WHERE userid=? ", [password, self.__userid])
+
+            if last_login_ts is not None:
+                # TODO: Add password length/criteria validation and hashing
+                c.execute("UPDATE User SET last_login_ts=? WHERE userid=? ", [last_login_ts, self.__userid])
+
+            if admin is not None:
+                # TODO: Add password length/criteria validation and hashing
+                c.execute("UPDATE User SET admin=? WHERE userid=?", [1 if admin else 0, self.__userid])
+
+            if active is not None:
+                # TODO: Add password length/criteria validation and hashing
+                c.execute("UPDATE User SET active=? WHERE userid=? ", [1 if active else 0, self.__userid])
+
+            self.__db.commit()
+
+        except sqlite3.Error as e:
+            self.__db.rollback()
+            print(f"ERROR: Exception raised when updating user {self.__userid}. Details\n{e}")
+            raise e
 
     @staticmethod
     def add(username, password, db:sqlite3.Connection):
@@ -250,7 +290,7 @@ class Message(ChatterDB):
         try:
             c = self.__db.cursor()
 
-            if content:
+            if content is not None:
                 c.execute("UPDATE Message SET content=? WHERE messageid=?", [content, self.__messageid])
                 self.__content = content
 
