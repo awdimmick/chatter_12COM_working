@@ -1,4 +1,4 @@
-import sqlite3, abc, datetime
+import sqlite3, abc, datetime, random
 
 DB_PATH = 'chatter_db.db'
 
@@ -83,21 +83,24 @@ class User(ChatterDB):
             # TODO: Check the user isn't the only owner of a chatroom before deleting them
 
             # Assuming we can delete, we need to update all messages that the user has sent to be senderid = 0
-            users_messsages = Message.get_messages_from_user(self.__userid, self.__db)
-            for m in users_messsages:
-                # update senderid to 0
-                m.update(senderid=0)
+            users_messsages = Message.get_messages_for_user(self.__userid, self.__db)
 
             try:
                 c = self.__db.cursor()
                 c.execute("DELETE FROM User WHERE userid=?", [self.__userid])
+
+                for m in users_messsages:
+                    # update senderid to 0
+                    m.update(senderid=0)
+
                 self.__db.commit()
+
             except sqlite3.Error as e:
-                raise UserActionError(f"ERROR: Cannot delete userid {self.__userid}. Details:\n{e}")
                 self.__db.rollback()
                 for m in users_messsages:
                     # update senderid to 0
                     m.update(senderid=self.__userid)
+                raise UserActionError(f"ERROR: Cannot delete userid {self.__userid}. Details:\n{e}")
 
         else:
             # raise error
@@ -105,7 +108,6 @@ class User(ChatterDB):
                                       f"to delete userid {self.__userid}.")
 
     def update(self, username=None, password=None, last_login_ts=None, admin=None, active=None):
-        # TODO: Add User.update()
         try:
             c = self.__db.cursor()
 
@@ -118,22 +120,23 @@ class User(ChatterDB):
                     raise UserActionError(f"User already exists with username '{username}'.")
 
                 c.execute("UPDATE User SET username=? WHERE userid=? ", [ username, self.__userid])
+                self.__username = username
 
             if password is not None:
                 # TODO: Add password length/criteria validation and hashing
                 c.execute("UPDATE User SET password=? WHERE userid=? ", [password, self.__userid])
 
             if last_login_ts is not None:
-                # TODO: Add password length/criteria validation and hashing
                 c.execute("UPDATE User SET last_login_ts=? WHERE userid=? ", [last_login_ts, self.__userid])
+                self.__last_login_ts = last_login_ts
 
             if admin is not None:
-                # TODO: Add password length/criteria validation and hashing
                 c.execute("UPDATE User SET admin=? WHERE userid=?", [1 if admin else 0, self.__userid])
+                self.__admin = admin
 
             if active is not None:
-                # TODO: Add password length/criteria validation and hashing
                 c.execute("UPDATE User SET active=? WHERE userid=? ", [1 if active else 0, self.__userid])
+                self.__active = active
 
             self.__db.commit()
 
@@ -171,6 +174,9 @@ class ChatroomNotFoundError(Exception):
     pass
 
 
+class ChatroomActionError(Exception):
+    pass
+
 class Chatroom(ChatterDB):
 
     def __init__(self, chatroomid, db: sqlite3.Connection):
@@ -206,25 +212,126 @@ class Chatroom(ChatterDB):
     @description.setter
     def description(self, value):
         self.__description = value
-        # TODO: Will need to call update method to update description in database
-        # self.__update(description=value)
+        self.update(description=value)
 
     @property
     def joincode(self):
         return self.__joincode
 
-    def delete(self):
-        # TODO: Add Chatroom.delete()
-        pass
+    @staticmethod
+    def __get_new_joincode():
 
-    def update(self):
-        # TODO: Add Chatroom.update()
-        pass
+        new_joincode = ""
+
+        chars = [x for x in range(65, 92)] + [x for x in range(97, 124)] + [x for x in range(48, 58)]
+
+        for x in range(6):
+            new_joincode += chr(random.choice(chars))
+
+        return new_joincode
+
+    def update_join_code(self):
+        self.__joincode = self.__get_new_joincode()
+        self.update(joincode=self.__joincode)
+
+    def delete(self):
+        try:
+
+            # Delete all messages associated with the chatroom
+            messages_to_delete = Message.get_msesages_for_chatroom(self.__chatroomid, self.__db)
+
+            c = self.__db.cursor()
+
+            c.execute("DELETE FROM Chatroom WHERE chatroomid=?", [self.__chatroomid])
+
+            # Hold off on deletings messages until the chatroom has been successfully deleted.
+            for m in messages_to_delete:
+                m.delete()
+
+            self.__db.commit()
+
+        except sqlite3.Error as e:
+            self.__db.rollback()
+            print(f"ERROR: Exception raised when deleting chatroomid {self.__chatroomid}. Details:\n{e}")
+            raise e
 
     @staticmethod
-    def add():
-        # TODO: Add Chatroom.add()
-        pass
+    def __check_name_is_unique(name, db:sqlite3.Connection):
+
+        # Check chatroom name is unique
+        c = db.cursor()
+        if c.execute("SELECT chatroomid FROM Chatroom WHERE name=?", [name]).fetchone():
+            raise ChatroomActionError(f"Chatroom name {name} already in use.")
+
+    @staticmethod
+    def __check_join_code_is_unique(joincode, db:sqlite3.Connection):
+        c = db.cursor()
+        if c.execute("SELECT chatroomid FROM Chatroom WHERE joincode=?", [joincode]).fetchone():
+            raise ChatroomActionError(f"Chatroom joincode {joincode} already in use.")
+
+    def update(self, name=None, description=None, joincode=None):
+
+        try:
+
+            c = self.__db.cursor()
+
+            if name is not None:
+
+                self.__check_name_is_unique(name, self.__db)
+                c.execute("UPDATE Chatroom SET name=? WHERE chatroomid=?", [name, self.__chatroomid])
+                self.__name = name
+
+            if description is not None:
+                c.execute("UPDATE Chatroom SET description=? WHERE chatroomid=?", [description, self.__chatroomid])
+                self.__description = description
+
+            if joincode is not None:
+
+                self.__check_join_code_is_unique(joincode, self.__db)
+                c.execute("UPDATE Chatroom SET joincode=? WHERE chatroomid=?", [joincode, self.__chatroomid])
+                self.__joincode = joincode
+
+            self.__db.commit()
+
+        except sqlite3.Error as e:
+            self.__db.rollback()
+            print(f"ERROR: Exception raised when updating chatroomid {self.__chatroomid}. Details:\n{e}")
+
+        except ChatroomActionError as e:
+            self.__db.rollback()
+            print(f"ERROR: Exception raised when updating chatroomid {self.__chatroomid}. Details:\n{e}")
+            raise e
+
+
+    @staticmethod
+    def add(name, descrption, db:sqlite3.Connection):
+
+        try:
+
+            c = db.cursor()
+
+            Chatroom.__check_name_is_unique(name, db)
+
+            while True:
+                try:
+                    new_join_code = Chatroom.__get_new_joincode()
+                    Chatroom.__check_join_code_is_unique(new_join_code, db)
+                    break
+                except ChatroomActionError:
+                    print("WARNING: new_join_code in use. Generating another.")
+
+
+            c.execute("INSERT INTO Chatroom (name, description, joincode) VALUES (?, ?, ?)",
+                      [name, descrption, Chatroom.__get_new_joincode()])
+
+            db.commit()
+
+            return Chatroom(c.lastrowid, db)
+
+        except sqlite3.Error as e:
+
+            db.rollback()
+            print(f"ERROR: Unable to add chatroom with name {name}.Details:\n{e}")
 
 
 class MessageNotFoundError(Exception):
@@ -281,10 +388,21 @@ class Message(ChatterDB):
         return datetime.datetime.fromtimestamp(self.__timestamp)
 
     def delete(self):
-        #TODO: Add Message.delete()
-        pass
 
-    # Tweaked the interface below to include db
+        try:
+
+            c = self.__db.cursor()
+
+            # TODO: Get all attachments for message and delete them also (files as well as entries in database)
+
+            c.execute("DELETE FROM Message WHERE messageid=?", [self.__messageid])
+
+            self.__db.commit()
+
+        except sqlite3.Error as e:
+            print(f"ERROR: Database exception raised when deleting messageid {self.__messageid}. Details:\n{e}")
+            raise e
+
     def update(self, content=None, chatroomid=None, senderid=None, timestamp:datetime.datetime=None):
 
         try:
@@ -332,7 +450,7 @@ class Message(ChatterDB):
             raise e
 
     @staticmethod
-    def get_messages_from_user(userid, db:sqlite3.Connection):
+    def get_messages_for_user(userid, db:sqlite3.Connection):
 
         c = db.cursor()
 
@@ -345,6 +463,22 @@ class Message(ChatterDB):
             messages_to_return.append(Message(int(row['messageid']), db))
 
         return messages_to_return
+
+    @staticmethod
+    def get_msesages_for_chatroom(chatroomid, db:sqlite3.Connection):
+
+        # TODO: Exception handling for the database connection
+
+        try:
+            c = db.cursor()
+
+            message_rows = c.execute("SELECT messageid FROM Message WHERE chatroomid=?", [chatroomid]).fetchall()
+
+            return [Message(int(row['messageid']), db) for row in message_rows]
+
+        except sqlite3.Connection as e:
+            print(f"ERROR: Unable to retrieve messages for chatroomid {chatroomid}. Details\n{e}")
+            raise e
 
 
 class AttachmentNotFoundError(Exception):
@@ -383,7 +517,7 @@ class Attachment(ChatterDB):
         return Message(self.__messageid, self.__db)
 
     def delete(self):
-        # TODO: Add Attachment.delete()
+        # TODO: Add Attachment.delete() - needs to delete the files for the attachment too
         pass
 
     def update(self):

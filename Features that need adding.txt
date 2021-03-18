@@ -1,0 +1,2 @@
+JSON rendering for all classes
+login and authentication to web session

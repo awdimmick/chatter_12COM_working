@@ -170,7 +170,7 @@ class TestUser(unittest.TestCase):
         u = chatter_classes.User(5, db)
 
         # As well as deleting the user, we need to ensure that their messages have been reassigned
-        users_messages = chatter_classes.Message.get_messages_from_user(5, db)
+        users_messages = chatter_classes.Message.get_messages_for_user(5, db)
         users_message_ids = [message.messageid for message in users_messages]
 
         u.delete(chatter_classes.User(6, db))  # User 6 is TestAdmin
@@ -209,8 +209,52 @@ class TestChatroom(unittest.TestCase):
     def test_constructor_chatroom_not_found(self):
         self.assertRaises(chatter_classes.ChatroomNotFoundError, chatter_classes.Chatroom, -1, db)
 
+    def test_add_chatroom(self):
+        cr = chatter_classes.Chatroom.add("UnitTestChatroom", "Created by TestChatroom.test_add_chatroom", db)
+        self.assertIsInstance(cr, chatter_classes.Chatroom)
+        self.assertEqual(cr.name, "UnitTestChatroom")
+        self.assertEqual(cr.description, "Created by TestChatroom.test_add_chatroom")
+        acceptable_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+        for c in cr.joincode:
+            self.assertIn(c, acceptable_chars)
+        self.assertEqual(len(cr.joincode), 6)
+
+    def test_delete_chatroom(self):
+        cr = chatter_classes.Chatroom.add("UnitTestChatroomForDeletion", "Created by TestChatroom.test_delete_chatroom", db)
+        cr_id = cr.chatroomid
+        cr.delete()
+        self.assertRaises(chatter_classes.ChatroomNotFoundError, chatter_classes.Chatroom, cr_id, db)
+
+    def test_update_chatroom(self):
+
+        # Create a chatroom for testing
+        cr = chatter_classes.Chatroom.add("UnitTestChatroomForUpdate", "Created by TestChatroom.test_update_chatroom", db)
+        cr_id = cr.chatroomid
+        cr.update_join_code()
+        cr.update(name="UnitTestChatroomForUpdateB", description="Created by TestChatroom.test_update_chatroomB")
+
+        # Instantiate a second instance of the same chatroom and check that its properties match those of the updated
+        # one
+        crB = chatter_classes.Chatroom(cr_id, db)
+        self.assertEqual(cr.name, crB.name)
+        self.assertEqual(cr.description, crB.description)
+        self.assertEqual(cr.joincode, crB.joincode)
+
+        # Delete chatrooms now that we have finished with them
+        cr.delete()
+        crB.delete()
+
+
+
+
+
 
 class TestMessage(unittest.TestCase):
+
+
+    # TODO: Add test for updating message
+    # TODO: Add test for retrieving all messages for a particular user
+    # TODO: Add test for retrieving all messages for a particular chatroom
 
     def test_contructor_existing_message(self):
         m = chatter_classes.Message(1, db)
@@ -232,6 +276,13 @@ class TestMessage(unittest.TestCase):
         self.assertEqual(message.content, text)
         self.assertEqual(message.sender.username, chatter_classes.User(1, db).username)
         self.assertEqual(message.chatroom.name, chatter_classes.Chatroom(1, db).name)
+
+
+    def test_delete_message(self):
+        m = chatter_classes.Message.add("This is a message to delete", 1, 1, db)
+        m_id = m.messageid
+        m.delete()
+        self.assertRaises(chatter_classes.MessageNotFoundError, chatter_classes.Message, m_id, db)
 
 
 class TestAttachment(unittest.TestCase):
