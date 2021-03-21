@@ -77,6 +77,10 @@ class User(ChatterDB):
         # Rather than a meaningless integer, provide a useful datetime object
         return datetime.datetime.fromtimestamp(self.__last_login_ts)
 
+    @property
+    def json(self):
+        return self.__encode_json()
+
     def delete(self, active_user):
         # Do we have permission to delete? Is the active user either the self or an admin?
         if active_user.userid == self.__userid or active_user.is_admin:
@@ -175,6 +179,27 @@ class User(ChatterDB):
     def get_chatrooms(self):
         return Chatroom.get_chatrooms_for_user(self.__userid, self.__db)
 
+    def __encode_json(self):
+
+        chatrooms = self.get_chatrooms()
+        cr_owner_ids = []
+        cr_member_ids = []
+
+        for cr in chatrooms['owner']:
+            cr_owner_ids.append(cr.chatroomid)
+
+        for cr in chatrooms['member']:
+            cr_member_ids.append(cr.chatroomid)
+
+        return json.dumps({
+            'userid':self.__userid,
+            'username':self.__username,
+            'admin':self.__admin,
+            'active':self.__active,
+            'last_login_ts': self.__last_login_ts,
+            'chatrooms': {'owner': cr_owner_ids, 'member': cr_member_ids}
+        }, sort_keys=False, indent=4)
+
 
 class ChatroomNotFoundError(Exception):
     pass
@@ -182,6 +207,7 @@ class ChatroomNotFoundError(Exception):
 
 class ChatroomActionError(Exception):
     pass
+
 
 class Chatroom(ChatterDB):
 
@@ -224,12 +250,20 @@ class Chatroom(ChatterDB):
     def joincode(self):
         return self.__joincode
 
+    @property
+    def json(self):
+        return self.__encode_json()
+
+    @property
+    def json_with_messages(self):
+        return self.__encode_json_with_messages()
+
     @staticmethod
     def __get_new_joincode():
 
         new_joincode = ""
 
-        chars = [x for x in range(65, 92)] + [x for x in range(97, 124)] + [x for x in range(48, 58)]
+        chars = [x for x in range(65, 91)] + [x for x in range(97, 123)] + [x for x in range(48, 58)]
 
         for x in range(6):
             new_joincode += chr(random.choice(chars))
@@ -404,6 +438,38 @@ class Chatroom(ChatterDB):
 
         return rooms
 
+    def __encode_json(self):
+
+        message_ids = [m.messageid for m in self.get_messages()]
+        owner_ids = [o.userid for o in self.get_all_owners()]
+        member_ids = [m.userid for m in self.get_all_members()]
+
+        return json.dumps({
+            'chatroomid': self.__chatroomid,
+            'name': self.__name,
+            'description': self.__description,
+            'joincode': self.__joincode,
+            'messages': message_ids,
+            'owners': owner_ids,
+            'members': member_ids
+        }, sort_keys=False, indent=4)
+
+    def __encode_json_with_messages(self):
+
+        messages = [m.json for m in self.get_messages()]
+
+        owner_ids = [o.userid for o in self.get_all_owners()]
+        member_ids = [m.userid for m in self.get_all_members()]
+
+        return json.dumps({
+            'chatroomid': self.__chatroomid,
+            'name': self.__name,
+            'description': self.__description,
+            'joincode': self.__joincode,
+            'messages': messages,
+            'owners': owner_ids,
+            'members': member_ids
+        }, sort_keys=False, indent=4)
 
 class MessageNotFoundError(Exception):
     pass
@@ -461,6 +527,10 @@ class Message(ChatterDB):
     @property
     def attachments(self):
         return Attachment.get_all_attachments_for_message(self.__messageid, self.__db)
+
+    @property
+    def json(self):
+        return self.__encode_json()
 
     def delete(self):
 
@@ -586,6 +656,20 @@ class Message(ChatterDB):
             print(f"ERROR: Unable to retrieve message count for chatroomid {chatroomid}. Details\n{e}")
             raise e
 
+    def __encode_json(self):
+
+        attachments = [a.json for a in self.attachments]
+
+        return json.dumps({
+            'messageid': self.__messageid,
+            'content': self.__content,
+            'chatroomid': self.__chatroomid,
+            'senderid': self.__senderid,
+            'timestamp': self.__timestamp,
+            'attachments': attachments
+
+        }, sort_keys=False, indent=4)
+
 
 class AttachmentNotFoundError(Exception):
     pass
@@ -611,6 +695,10 @@ class Attachment(ChatterDB):
             raise AttachmentNotFoundError(f"ERROR: No attachment found with attachment {attachmentid}.")
 
     @property
+    def attachmentid(self):
+        return self.__attachmentid
+
+    @property
     def filepath(self):
         # TODO: Could update this to include the static path once it is known
         return self.__filepath
@@ -622,6 +710,10 @@ class Attachment(ChatterDB):
     @property
     def message(self):
         return Message(self.__messageid, self.__db)
+
+    @property
+    def json(self):
+        return self.__encode_json()
 
     def delete(self):
         # First remove the associated files
@@ -693,6 +785,14 @@ class Attachment(ChatterDB):
             print(f"ERROR: Unable to retrieve attachments for messsageid {messsageid}. Details\n{e}")
             raise e
 
+    def __encode_json(self):
+
+        return json.dumps({
+            'attachmentid': self.__attachmentid,
+            'filepath': self.__filepath,
+            'messageid': self.__messageid,
+
+        }, sort_keys=False, indent=4)
 
 if __name__ == "__main__":
 

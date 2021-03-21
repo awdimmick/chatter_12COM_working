@@ -216,6 +216,12 @@ class TestUser(unittest.TestCase):
         self.assertEqual(2, len(rooms['owner']))
         self.assertEqual(1, len(rooms['member']))
 
+    def test_user_json(self):
+        u = chatter_classes.User(1, db)
+        js = u.json
+        print(js)
+        self.assertNotEqual(0, len(js))
+
 
 class TestChatroom(unittest.TestCase):
 
@@ -341,12 +347,20 @@ class TestChatroom(unittest.TestCase):
 
         self.assertEqual(1, message_count)
 
+    def test_chatroom_json(self):
+        c = chatter_classes.Chatroom(1, db)
+        js = c.json
+        print(js)
+        self.assertNotEqual(0, len(js))
 
-
+    def test_chatroom_json_with_messages(self):
+        c = chatter_classes.Chatroom(1, db)
+        js = c.json_with_messages
+        print(js)
+        self.assertNotEqual(0, len(js))
 
 
 class TestMessage(unittest.TestCase):
-
 
     # TODO: Add test for updating message
     # TODO: Add test for retrieving all messages for a particular user
@@ -387,6 +401,12 @@ class TestMessage(unittest.TestCase):
         m = chatter_classes.Message(7, db)
         self.assertEqual(2, m.chatroom.chatroomid)
 
+    def test_message_json(self):
+        m = chatter_classes.Message(1, db)
+        js = m.json
+        print(js)
+        self.assertNotEqual(0, len(js))
+
 
 class TestAttachment(unittest.TestCase):
 
@@ -397,6 +417,12 @@ class TestAttachment(unittest.TestCase):
 
     def test_constructor_attachment_not_found(self):
         self.assertRaises(chatter_classes.AttachmentNotFoundError, chatter_classes.Attachment, -1, db)
+
+    def test_attachment_json(self):
+        a = chatter_classes.Attachment(1, db)
+        js = a.json
+        print(js)
+        self.assertNotEqual(0, len(js))
 
     # TODO: Add test for deleting attachment (including files)
 
