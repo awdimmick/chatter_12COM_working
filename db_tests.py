@@ -170,7 +170,7 @@ class TestUser(unittest.TestCase):
         u = chatter_classes.User(5, db)
 
         # As well as deleting the user, we need to ensure that their messages have been reassigned
-        users_messages = chatter_classes.Message.get_messages_for_user(5, db)
+        users_messages = chatter_classes.Message.get_messages_for_user(5, None, db)
         users_message_ids = [message.messageid for message in users_messages]
 
         u.delete(chatter_classes.User(6, db))  # User 6 is TestAdmin
@@ -198,6 +198,23 @@ class TestUser(unittest.TestCase):
 
         # Restore Test User 1's details
         u.update(username="TestUser1", password="pass1234", last_login_ts=0, active=True, admin=False)
+
+    def test_user_send_message(self):
+
+        cr = chatter_classes.Chatroom(1, db)
+        message_count = cr.get_message_count()
+
+        u = chatter_classes.User(1,db)
+        u.send_message("Sent by test_user_send_message()", cr.chatroomid)
+
+        self.assertEqual(message_count + 1, chatter_classes.Chatroom(1, db).get_message_count())
+
+    def test_user_memberships(self):
+
+        u = chatter_classes.User(2, db)
+        rooms = u.get_chatrooms()
+        self.assertEqual(2, len(rooms['owner']))
+        self.assertEqual(1, len(rooms['member']))
 
 
 class TestChatroom(unittest.TestCase):
@@ -244,6 +261,85 @@ class TestChatroom(unittest.TestCase):
         cr.delete()
         crB.delete()
 
+    def test_get_all_members(self):
+
+        cr = chatter_classes.Chatroom(1, db)
+        members = cr.get_all_members()
+        self.assertEqual(2, len(members))
+        self.assertEqual(2, members[0].userid)
+        self.assertEqual(3, members[1].userid)
+
+    def test_get_all_owners(self):
+
+        cr = chatter_classes.Chatroom(1, db)
+        owners = cr.get_all_owners()
+        self.assertEqual(1, len(owners))
+        self.assertEqual(1, owners[0].userid)
+
+    def test_check_user_is_member(self):
+
+        cr = chatter_classes.Chatroom(2, db)
+        u1 = chatter_classes.User(3, db)
+        u2 = chatter_classes.User(4, db)
+        self.assertTrue(cr.user_is_member(u1))
+        self.assertTrue(cr.user_is_member(u2))
+
+    def test_check_user_is_owner(self):
+
+        cr = chatter_classes.Chatroom(2, db)
+        u = chatter_classes.User(2, db)
+
+        self.assertTrue(cr.user_is_owner(u))
+
+    def test_add_message_for_chatroom(self):
+
+        cr = chatter_classes.Chatroom(2, db)
+        message_count = cr.get_message_count()
+        cr.add_message("Added by test_add_message_for_chatroom()", cr.get_all_owners()[0].userid)
+        self.assertEqual(message_count + 1, chatter_classes.Chatroom(2, db).get_message_count())
+
+    def test_get_all_messages(self):
+        cr = chatter_classes.Chatroom(3, db)
+        messages = cr.get_messages()
+        self.assertEqual(9, len(messages))
+
+    def test_get_message_count(self):
+        cr = chatter_classes.Chatroom(3, db)
+        self.assertEqual(9, cr.get_message_count())
+
+    def test_get_all_messages_since(self):
+        cr = chatter_classes.Chatroom(1, db)
+        now = datetime.datetime.now()
+
+        message_content = "Added by test_get_all_message_since()"
+
+        chatter_classes.Message.add(message_content, cr.chatroomid,
+                                    cr.get_all_owners()[0].userid, db)
+
+        print("Waiting two seconds before checking for recent messages")
+        time.sleep(2)
+
+        messages = cr.get_messages(now)
+
+        self.assertEqual(1, len(messages))
+        self.assertEqual(message_content, messages[0].content)
+
+    def test_get_message_count_since(self):
+
+        cr = chatter_classes.Chatroom(1, db)
+        now = datetime.datetime.now()
+
+        message_content = "Added by test_get_message_count_since()"
+
+        chatter_classes.Message.add(message_content, cr.chatroomid,
+                                    cr.get_all_owners()[0].userid, db)
+
+        print("Waiting two seconds before checking for recent messages")
+        time.sleep(2)
+
+        message_count = cr.get_message_count(now)
+
+        self.assertEqual(1, message_count)
 
 
 
@@ -277,12 +373,19 @@ class TestMessage(unittest.TestCase):
         self.assertEqual(message.sender.username, chatter_classes.User(1, db).username)
         self.assertEqual(message.chatroom.name, chatter_classes.Chatroom(1, db).name)
 
-
     def test_delete_message(self):
         m = chatter_classes.Message.add("This is a message to delete", 1, 1, db)
         m_id = m.messageid
         m.delete()
         self.assertRaises(chatter_classes.MessageNotFoundError, chatter_classes.Message, m_id, db)
+
+    def test_sender(self):
+        m = chatter_classes.Message(1, db)
+        self.assertEqual(1, m.sender.userid)
+
+    def test_chatroom(self):
+        m = chatter_classes.Message(7, db)
+        self.assertEqual(2, m.chatroom.chatroomid)
 
 
 class TestAttachment(unittest.TestCase):

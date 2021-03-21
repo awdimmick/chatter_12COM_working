@@ -1,2 +1,20 @@
-JSON rendering for all classes
+** JSON rendering for all classes **
+
 login and authentication to web session
+
+Chatrooms:
+- Get all members - DONE
+- Get all owners - DONE
+- Check if a user is a member - DONE
+- Check if a user is an owner - DONE
+- Get all messages (opt: since) - DONE
+- Get message count (opt: since) - DONE
+- Add Message - DONE
+
+Message:
+- get sender - DONE
+- get chatroom - DONE
+
+User:
+- get chatroom memberships - could return two lists one membership one ownerships - DONE
+- Send message - DONE

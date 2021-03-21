@@ -1,4 +1,4 @@
-import sqlite3, abc, datetime, random
+import sqlite3, abc, datetime, random, os, json
 
 DB_PATH = 'chatter_db.db'
 
@@ -83,7 +83,7 @@ class User(ChatterDB):
             # TODO: Check the user isn't the only owner of a chatroom before deleting them
 
             # Assuming we can delete, we need to update all messages that the user has sent to be senderid = 0
-            users_messsages = Message.get_messages_for_user(self.__userid, self.__db)
+            users_messsages = Message.get_messages_for_user(self.__userid, None, self.__db)
 
             try:
                 c = self.__db.cursor()
@@ -169,6 +169,12 @@ class User(ChatterDB):
             print(f"ERROR: Exception raised when adding user {username}.\n"
                   f"Database rolled back to last commit. Details:\n{e}")
 
+    def send_message(self, content, chatroomid):
+        return Message.add(content, chatroomid, self.__userid, self.__db)
+
+    def get_chatrooms(self):
+        return Chatroom.get_chatrooms_for_user(self.__userid, self.__db)
+
 
 class ChatroomNotFoundError(Exception):
     pass
@@ -238,7 +244,7 @@ class Chatroom(ChatterDB):
         try:
 
             # Delete all messages associated with the chatroom
-            messages_to_delete = Message.get_msesages_for_chatroom(self.__chatroomid, self.__db)
+            messages_to_delete = Message.get_msesages_for_chatroom(self.__chatroomid, None, self.__db)
 
             c = self.__db.cursor()
 
@@ -302,7 +308,6 @@ class Chatroom(ChatterDB):
             print(f"ERROR: Exception raised when updating chatroomid {self.__chatroomid}. Details:\n{e}")
             raise e
 
-
     @staticmethod
     def add(name, descrption, db:sqlite3.Connection):
 
@@ -320,7 +325,6 @@ class Chatroom(ChatterDB):
                 except ChatroomActionError:
                     print("WARNING: new_join_code in use. Generating another.")
 
-
             c.execute("INSERT INTO Chatroom (name, description, joincode) VALUES (?, ?, ?)",
                       [name, descrption, Chatroom.__get_new_joincode()])
 
@@ -332,6 +336,73 @@ class Chatroom(ChatterDB):
 
             db.rollback()
             print(f"ERROR: Unable to add chatroom with name {name}.Details:\n{e}")
+
+    def get_all_members(self):
+
+        c = self.__db.cursor()
+        member_rows = c.execute("SELECT userid FROM ChatroomMember WHERE chatroomid=? AND owner=0",
+                                [self.__chatroomid]).fetchall()
+
+        # Return a list of User objects for all Users that are members of this chatroom
+        return [User(m['userid'], self.__db) for m in member_rows]
+
+    def get_all_owners(self):
+
+        c = self.__db.cursor()
+        member_rows = c.execute("SELECT userid FROM ChatroomMember WHERE chatroomid=? AND owner=1",
+                                [self.__chatroomid]).fetchall()
+
+        # Return a list of User objects for all Users that are members of this chatroom
+        return [User(m['userid'], self.__db) for m in member_rows]
+
+    def user_is_owner(self, u:User):
+
+        c = self.__db.cursor()
+        user_row = c.execute("SELECT userid FROM ChatroomMember WHERE chatroomid=? AND userid=? AND owner=1",
+                             [self.__chatroomid, u.userid]).fetchone()
+
+        return True if user_row else False
+
+    def user_is_member(self, u: User):
+
+        c = self.__db.cursor()
+        user_row = c.execute("SELECT userid FROM ChatroomMember WHERE chatroomid=? AND userid=? AND owner=0",
+                             [self.__chatroomid, u.userid]).fetchone()
+
+        return True if user_row else False
+
+    def get_messages(self, since=None):
+        return Message.get_msesages_for_chatroom(self.__chatroomid, since, self.__db)
+
+    def get_message_count(self, since=None):
+        return Message.get_message_count_for_chatroom(self.__chatroomid, since, self.__db)
+
+    def add_message(self, content, senderid):
+        return Message.add(content, self.__chatroomid, senderid, self.__db)
+
+    @staticmethod
+    def get_chatrooms_for_user(userid, db: sqlite3.Connection) -> dict:
+        """
+        Finds all chatrooms for a particular user, returning them in a dictionary containing a list of chatrooms where
+        the user is an owner and another list where they are members.
+        :param u: The user for whom chatrooms are to be found
+        :param db: Database connection
+        :return: A dictionary with 'owner' and 'member' keys, each paired with a list of Chatroom objects
+        """
+
+        rooms = {'owner': [], 'member': []}
+
+        c = db.cursor()
+
+        rows = c.execute("SELECT chatroomid, owner FROM ChatroomMember WHERE userid=?", [userid]).fetchall()
+
+        for r in rows:
+            if bool(r['owner']):
+                rooms['owner'].append(Chatroom(r['chatroomid'], db))
+            else:
+                rooms['member'].append(Chatroom(r['chatroomid'], db))
+
+        return rooms
 
 
 class MessageNotFoundError(Exception):
@@ -393,13 +464,17 @@ class Message(ChatterDB):
 
             c = self.__db.cursor()
 
-            # TODO: Get all attachments for message and delete them also (files as well as entries in database)
+            # Get all attachments for message and delete them also (files as well as entries in database)
+            attachments = Attachment.get_all_attachments_for_message(self.__messageid, self.__db)
+            for a in attachments:
+                a.delete()
 
             c.execute("DELETE FROM Message WHERE messageid=?", [self.__messageid])
 
             self.__db.commit()
 
         except sqlite3.Error as e:
+            self.__db.rollback()
             print(f"ERROR: Database exception raised when deleting messageid {self.__messageid}. Details:\n{e}")
             raise e
 
@@ -436,6 +511,7 @@ class Message(ChatterDB):
     def add(content, chatroomid, senderid, db:sqlite3.Connection):
         try:
             c = db.cursor()
+            #          (content, chatroomid, senderid, int(round(datetime.datetime.now().timestamp(), 0))))
             c.execute("INSERT INTO Message (content, chatroomid, senderid, timestamp) VALUES (?, ?, ?, ?)",
                       (content, chatroomid, senderid, datetime.datetime.now().timestamp()))
             new_messageid = c.lastrowid
@@ -450,11 +526,15 @@ class Message(ChatterDB):
             raise e
 
     @staticmethod
-    def get_messages_for_user(userid, db:sqlite3.Connection):
+    def get_messages_for_user(userid, since:datetime.datetime, db:sqlite3.Connection):
+
+        if not since:
+            since = datetime.datetime.fromtimestamp(0)
 
         c = db.cursor()
 
-        message_rows = c.execute("SELECT messageid FROM Message WHERE senderid = ?", [userid]).fetchall()
+        message_rows = c.execute("SELECT messageid FROM Message WHERE senderid = ? AND timestamp > ?",
+                                 [userid, since.timestamp()]).fetchall()
 
         messages_to_return = []
 
@@ -465,19 +545,39 @@ class Message(ChatterDB):
         return messages_to_return
 
     @staticmethod
-    def get_msesages_for_chatroom(chatroomid, db:sqlite3.Connection):
+    def get_msesages_for_chatroom(chatroomid, since:datetime.datetime, db:sqlite3.Connection):
 
-        # TODO: Exception handling for the database connection
+        if not since:
+            since = datetime.datetime.fromtimestamp(0)
 
         try:
             c = db.cursor()
 
-            message_rows = c.execute("SELECT messageid FROM Message WHERE chatroomid=?", [chatroomid]).fetchall()
+            message_rows = c.execute("SELECT messageid FROM Message WHERE chatroomid=? AND timestamp>?",
+                                     [chatroomid, since.timestamp()]).fetchall()
 
             return [Message(int(row['messageid']), db) for row in message_rows]
 
         except sqlite3.Connection as e:
             print(f"ERROR: Unable to retrieve messages for chatroomid {chatroomid}. Details\n{e}")
+            raise e
+
+    @staticmethod
+    def get_message_count_for_chatroom(chatroomid, since:datetime.datetime, db:sqlite3.Connection):
+
+        if not since:
+            since = datetime.datetime.fromtimestamp(0)
+
+        try:
+            c = db.cursor()
+
+            row = c.execute("SELECT count(messageid) as message_count FROM Message WHERE chatroomid=? AND timestamp>?",
+                                     [chatroomid, since.timestamp()]).fetchone()
+
+            return row['message_count']
+
+        except sqlite3.Connection as e:
+            print(f"ERROR: Unable to retrieve message count for chatroomid {chatroomid}. Details\n{e}")
             raise e
 
 
@@ -506,6 +606,7 @@ class Attachment(ChatterDB):
 
     @property
     def filepath(self):
+        # TODO: Could update this to include the static path once it is known
         return self.__filepath
 
     @property
@@ -517,20 +618,77 @@ class Attachment(ChatterDB):
         return Message(self.__messageid, self.__db)
 
     def delete(self):
-        # TODO: Add Attachment.delete() - needs to delete the files for the attachment too
-        pass
+        # First remove the associated files
+        try:
+            os.remove(self.filepath)
 
-    def update(self):
-        # TODO: Add Attachment.update()
-        pass
+        except FileNotFoundError:
+            print(f"WARNING: Could not remove {self.__filepath} as the file could not be found. Proceeding with"
+                  f"deleting attachmentid {self.__attachmentid}.")
+
+        # Next remove data from database
+        try:
+            c = self.__db.cursor()
+            c.execute("DELETE FROM Attachment WHERE attachmentid=?", [self.__attachmentid])
+            self.__db.commit()
+
+        except sqlite3.Error as e:
+            self.__db.rollback()
+            print(f"ERROR: Exception raised when deleting attachmentid {self.__attachmentid}. Details:\n{e}")
+            raise e
+
+    def update(self, filepath):
+        # The only attribute that can be updated is the filepath for the attachment
+
+        try:
+            # Test if file exists
+            if not os.path.exists(filepath):
+                raise FileNotFoundError
+
+            c = self.__db.cursor()
+            c.execute("UPDATE Attachment SET filepath=? WHERE attachmentid=?", [self.__filepath, self.__attachmentid])
+            self.__db.commit()
+
+        except sqlite3.Error as e:
+            self.__db.rollback()
+            print(f"ERROR: Exception raised when updating attachmentid {self.__attachmentid}. Details:\n{e}")
+            raise e
+
+        except FileNotFoundError:
+            print(f"ERROR: file {filepath} could not be found. Aborting updated of attachmentid {self.__attachmentid}.")
 
     @staticmethod
-    def add():
-        # TODO: Add Attachment.add()
-        pass
+    def add(messageid, filepath, db:sqlite3.Connection):
+        # TODO: Add ability to receive any file, copy it to the correct path and set the correct path location for this
+        #  Attachment object
+        try:
+            c = db.cursor()
+            c.execute("INSERT INTO Attachment (messageid, filepath) VALUES (?, ?)", [messageid, filepath])
+            new_attachmentid = c.lastrowid
+            db.commit()
+            return Attachment(new_attachmentid, db)
+
+        except sqlite3.Error as e:
+            db.rollback()
+            print(f"ERROR: Exception raised when inserting a new attachment. Details:\n{e}")
+            raise e
+
+    @staticmethod
+    def get_all_attachments_for_message(messsageid, db:sqlite3.Connection):
+
+        try:
+            c = db.cursor()
+
+            attachment_rows = c.execute("SELECT attachmentid FROM Attachment WHERE messageid=?", [messsageid]).fetchall()
+
+            return [Attachment(int(row['attachmentid']), db) for row in attachment_rows]
+
+        except sqlite3.Connection as e:
+            print(f"ERROR: Unable to retrieve attachments for messsageid {messsageid}. Details\n{e}")
+            raise e
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
 
     db = get_db()
 
