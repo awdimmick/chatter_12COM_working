@@ -14,7 +14,12 @@ Chatrooms:
 Message:
 - get sender - DONE
 - get chatroom - DONE
+- add_attachment
+- get attachments
 
 User:
 - get chatroom memberships - could return two lists one membership one ownerships - DONE
 - Send message - DONE
+
+
+Add tests for deletion of items for all classes

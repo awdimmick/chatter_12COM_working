@@ -458,6 +458,10 @@ class Message(ChatterDB):
     def timestamp(self):
         return datetime.datetime.fromtimestamp(self.__timestamp)
 
+    @property
+    def attachments(self):
+        return Attachment.get_all_attachments_for_message(self.__messageid, self.__db)
+
     def delete(self):
 
         try:
@@ -506,6 +510,8 @@ class Message(ChatterDB):
             print(f"ERROR: Exception raised when updating messageid {self.__messageid}.\n"
                   f"Database rolled back to last commit. Details:\n{e}")
 
+    def add_attachment(self, filepath):
+        return Attachment.add(self.__messageid, filepath, self.__db)
 
     @staticmethod
     def add(content, chatroomid, senderid, db:sqlite3.Connection):

@@ -398,6 +398,10 @@ class TestAttachment(unittest.TestCase):
     def test_constructor_attachment_not_found(self):
         self.assertRaises(chatter_classes.AttachmentNotFoundError, chatter_classes.Attachment, -1, db)
 
+    # TODO: Add test for deleting attachment (including files)
+
+    # TODO: Add test for adding an attachment
+
 
 if __name__ == '__main__':
 
