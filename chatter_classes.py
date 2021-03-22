@@ -1,6 +1,6 @@
 import sqlite3, abc, datetime, random, os, json
 
-DB_PATH = 'chatter_db.db'
+DB_PATH = 'test.db'
 
 def get_db():
     db = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES)
@@ -34,6 +34,11 @@ class UserPermissionError(Exception):
 
 class UserActionError(Exception):
     pass
+
+
+class UserAuthenticationError(Exception):
+    pass
+
 
 class User(ChatterDB):
 
@@ -178,6 +183,23 @@ class User(ChatterDB):
 
     def get_chatrooms(self):
         return Chatroom.get_chatrooms_for_user(self.__userid, self.__db)
+
+    @staticmethod
+    def authenticate(username, password, db:sqlite3.Connection):
+
+        try:
+            c = db.cursor()
+            user_row = c.execute("SELECT userid FROM User WHERE username=? AND password=? AND active=1",
+                                 [username, password]).fetchone()
+            if user_row:
+                return User(user_row['userid'], db)
+
+            else:
+                raise UserAuthenticationError
+
+        except sqlite3.Error as e:
+            print(f"ERROR: Exception raised when attempting to authenticate a user. Details:\n{e}")
+            raise e
 
     def __encode_json(self):
 
@@ -665,7 +687,8 @@ class Message(ChatterDB):
 
         attachments = [a.json for a in self.attachments]
 
-        return json.dumps({
+        return json.dumps(
+            {
             'messageid': self.__messageid,
             'content': self.__content,
             'chatroomid': self.__chatroomid,
@@ -802,4 +825,3 @@ class Attachment(ChatterDB):
 if __name__ == "__main__":
 
     db = get_db()
-
