@@ -315,17 +315,17 @@ class TestChatroom(unittest.TestCase):
 
     def test_get_all_messages_since(self):
         cr = chatter_classes.Chatroom(1, db)
-        now = datetime.datetime.now()
+        start_time = datetime.datetime.now()
 
         message_content = "Added by test_get_all_message_since()"
+
+        print("Waiting two seconds before adding checking for recent messages")
+        time.sleep(2)
 
         chatter_classes.Message.add(message_content, cr.chatroomid,
                                     cr.get_all_owners()[0].userid, db)
 
-        print("Waiting two seconds before checking for recent messages")
-        time.sleep(2)
-
-        messages = cr.get_messages(now)
+        messages = cr.get_messages(start_time)
 
         self.assertEqual(1, len(messages))
         self.assertEqual(message_content, messages[0].content)
@@ -337,11 +337,12 @@ class TestChatroom(unittest.TestCase):
 
         message_content = "Added by test_get_message_count_since()"
 
+        print("Waiting two seconds before adding and checking for recent messages")
+
+        time.sleep(2)
+
         chatter_classes.Message.add(message_content, cr.chatroomid,
                                     cr.get_all_owners()[0].userid, db)
-
-        print("Waiting two seconds before checking for recent messages")
-        time.sleep(2)
 
         message_count = cr.get_message_count(now)
 

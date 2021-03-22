@@ -587,9 +587,10 @@ class Message(ChatterDB):
     def add(content, chatroomid, senderid, db:sqlite3.Connection):
         try:
             c = db.cursor()
+            ts = int(round(datetime.datetime.now().timestamp(),0))
             #          (content, chatroomid, senderid, int(round(datetime.datetime.now().timestamp(), 0))))
             c.execute("INSERT INTO Message (content, chatroomid, senderid, timestamp) VALUES (?, ?, ?, ?)",
-                      (content, chatroomid, senderid, datetime.datetime.now().timestamp()))
+                      (content, chatroomid, senderid, ts))
             new_messageid = c.lastrowid
             db.commit()
 
@@ -605,7 +606,7 @@ class Message(ChatterDB):
     def get_messages_for_user(userid, since:datetime.datetime, db:sqlite3.Connection):
 
         if not since:
-            since = datetime.datetime.fromtimestamp(0)
+            since = datetime.datetime(2010,1,1)
 
         c = db.cursor()
 
@@ -624,17 +625,19 @@ class Message(ChatterDB):
     def get_msesages_for_chatroom(chatroomid, since:datetime.datetime, db:sqlite3.Connection):
 
         if not since:
-            since = datetime.datetime.fromtimestamp(0)
+            since = datetime.datetime(2010,1,1)
 
         try:
             c = db.cursor()
 
+            ts = int(round(since.timestamp(), 0))
+
             message_rows = c.execute("SELECT messageid FROM Message WHERE chatroomid=? AND timestamp>?",
-                                     [chatroomid, since.timestamp()]).fetchall()
+                                     [chatroomid, ts]).fetchall()
 
             return [Message(int(row['messageid']), db) for row in message_rows]
 
-        except sqlite3.Connection as e:
+        except sqlite3.Error as e:
             print(f"ERROR: Unable to retrieve messages for chatroomid {chatroomid}. Details\n{e}")
             raise e
 
@@ -642,17 +645,19 @@ class Message(ChatterDB):
     def get_message_count_for_chatroom(chatroomid, since:datetime.datetime, db:sqlite3.Connection):
 
         if not since:
-            since = datetime.datetime.fromtimestamp(0)
+            since = datetime.datetime(2010,1,1)
 
         try:
             c = db.cursor()
 
+            ts = int(round(since.timestamp(), 0))
+
             row = c.execute("SELECT count(messageid) as message_count FROM Message WHERE chatroomid=? AND timestamp>?",
-                                     [chatroomid, since.timestamp()]).fetchone()
+                                     [chatroomid, ts]).fetchone()
 
             return row['message_count']
 
-        except sqlite3.Connection as e:
+        except sqlite3.Error as e:
             print(f"ERROR: Unable to retrieve message count for chatroomid {chatroomid}. Details\n{e}")
             raise e
 
@@ -781,7 +786,7 @@ class Attachment(ChatterDB):
 
             return [Attachment(int(row['attachmentid']), db) for row in attachment_rows]
 
-        except sqlite3.Connection as e:
+        except sqlite3.Error as e:
             print(f"ERROR: Unable to retrieve attachments for messsageid {messsageid}. Details\n{e}")
             raise e
 
