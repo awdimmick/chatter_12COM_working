@@ -1,6 +1,17 @@
 ** JSON rendering for all classes **
 
 login and authentication to web session
+- Add login form - show to post and handle incoming form data
+- Use an html template
+
+Render a chatroom and its messages
+- include using ajax for getting new messages from last few seconds
+- load message count since user last logged in
+- send a message to chatroom - again AJAX rather than standard form so we don't need to reload
+    the page
+   
+
+IT'S ONLY ONE MORE SESSION - NOT GOING TO COVER USER MANAGEMENT, CREATING CHATROOMS, ETC
 
 Chatrooms:
 - Get all members - DONE

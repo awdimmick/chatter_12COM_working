@@ -1,4 +1,4 @@
-from flask import Flask, g, session, json
+from flask import Flask, g, session, json, render_template, request, redirect, url_for, abort, flash, get_flashed_messages
 import chatter_classes as cc, sqlite3, os
 
 app = Flask(__name__)
@@ -26,9 +26,9 @@ def close_db(error):
         g.db.close()
 
 
-def get_active_user(db):
+def get_active_user() -> cc.User:
     try:
-        return cc.User(session['active_userid'], db)
+        return cc.User(session['active_userid'], get_db())
     except KeyError:
         return None
 
@@ -40,7 +40,7 @@ def hello_world():
 @app.route('/message/<int:messageid>')
 def show_message(messageid):
 
-    au = get_active_user(get_db())
+    au = get_active_user()
 
     if au:
 
@@ -60,14 +60,33 @@ def show_message(messageid):
     else:
         return 'You must be logged in to see this!'
 
-@app.route('/login')
+@app.route('/login', methods=['GET', 'POST'])
 def login():
 
-    active_user = cc.User.authenticate('TestUser1', 'pass1234', get_db())
+    '''active_user = cc.User.authenticate('TestUser1', 'pass1234', get_db())
 
     session['active_userid'] = active_user.userid
 
-    return str(active_user.userid)
+    return str(active_user.userid)'''
+
+    if request.method == "GET":
+        return render_template('login.html')
+    else:
+        # Process the login
+
+        username = request.form['username']
+        password = request.form['password']
+
+        try:
+            active_user = cc.User.authenticate(username, password, get_db())
+            session['active_userid'] = active_user.userid
+            return "Login successful! Welcome " + active_user.username
+
+        except cc.UserAuthenticationError:
+            flash("Invalid login details")
+            return render_template('login.html')
+
+
 
 @app.route('/logout')
 def logout():
@@ -76,6 +95,15 @@ def logout():
         del session['active_userid']
 
     return 'Logged out'
+
+
+@app.route('/view/chatroom/list')
+def view_chatroom_list():
+    au = get_active_user()
+    if au:
+        return render_template('show_chatrooms.html', au=au)
+    else:
+        return redirect(url_for('login'))
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000)
