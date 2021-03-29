@@ -5,6 +5,27 @@
     <title>Chatter - Chatrooms</title>
 </head>
 <body>
-<h1>Chatrooms for {{ au.username }}</h1>
+    <h1>Chatrooms for {{ au.username }}</h1>
+
+    {% with chatrooms = au.get_chatrooms() %}
+
+        {% if chatrooms %}
+
+            <h2>Chatrooms you own:</h2>
+            <ul>
+            {% for cr in chatrooms['owner'] %}
+                <li><a href="/view/chatroom/{{ cr.chatroomid }}"><strong>{{ cr.name }}</strong></a>&nbsp;{{ cr.description }}</li>
+            {% endfor %}
+            </ul>
+
+            <h2>Chatrooms you are a member of:</h2>
+            <ul>
+            {% for cr in chatrooms['member'] %}
+                <li><a href="/view/chatroom/{{ cr.chatroomid }}"><strong>{{ cr.name }}</strong></a>&nbsp;{{ cr.description }}</li>
+            {% endfor %}
+            </ul>
+
+        {% endif %}
+    {% endwith %}
 </body>
 </html>

@@ -280,6 +280,10 @@ class Chatroom(ChatterDB):
     def json_with_messages(self):
         return self.__encode_json_with_messages()
 
+    @property
+    def messages(self):
+        return self.get_messages()
+
     @staticmethod
     def __get_new_joincode():
 

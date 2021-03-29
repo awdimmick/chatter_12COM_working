@@ -58,22 +58,18 @@ def show_message(messageid):
             return 'You cannot see this message'
 
     else:
-        return 'You must be logged in to see this!'
+        flash("Please login to see this message")
+        return redirect(url_for('login'))
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
 
-    '''active_user = cc.User.authenticate('TestUser1', 'pass1234', get_db())
-
-    session['active_userid'] = active_user.userid
-
-    return str(active_user.userid)'''
 
     if request.method == "GET":
         return render_template('login.html')
     else:
-        # Process the login
-
+        # Process the login form
         username = request.form['username']
         password = request.form['password']
 
@@ -99,9 +95,27 @@ def logout():
 
 @app.route('/view/chatroom/list')
 def view_chatroom_list():
-    au = get_active_user()
-    if au:
-        return render_template('show_chatrooms.html', au=au)
+    active_user = get_active_user()
+    if active_user:
+        return render_template('show_chatrooms.html', au=active_user)
+    else:
+        return redirect(url_for('login'))
+
+@app.route('/view/chatroom/<int:chatroomid>')
+def view_chatroom(chatroomid):
+    active_user = get_active_user()
+    if active_user:
+        try:
+            chatroom = cc.Chatroom(chatroomid, get_db())
+            if chatroom.user_is_member(active_user) or chatroom.user_is_owner(active_user):
+
+                return render_template('chatroom.html', au=active_user, cr=chatroom)
+
+            else:
+                return "You do not have permission to see this chatroom"
+
+        except cc.ChatroomNotFoundError:
+            abort(404)
     else:
         return redirect(url_for('login'))
 

@@ -5,6 +5,26 @@
     <title>Chatter</title>
 </head>
 <body>
+    <h1>{{ cr.name }}</h1>
+    <h2>{{ cr.description }}</h2>
+
+    {% with messages = cr.messages %}
+
+        {% if messages %}
+
+            {% for m in messages %}
+
+                <div class="message">
+
+                    <p class="message_sender">{{ m.sender.username }}</p>
+                    <p class="message_content">{{ m.content }}</p>
+                    <p class="message_timestamp">{{ m.timestamp }}</p>
+
+                </div>
+
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
 
 </body>
 </html>
